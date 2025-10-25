@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "dgSpecHash": "VIPno48HTvg=",
+  "success": true,
+  "projectFilePath": "/Users/oleg/Projects/Crayon/CJF/src/Shared/JobContracts/JobContracts.csproj",
+  "expectedPackageFiles": [
+    "/Users/oleg/.nuget/packages/microsoft.netcore.app.ref/8.0.14/microsoft.netcore.app.ref.8.0.14.nupkg.sha512",
+    "/Users/oleg/.nuget/packages/microsoft.aspnetcore.app.ref/8.0.14/microsoft.aspnetcore.app.ref.8.0.14.nupkg.sha512"
+  ],
+  "logs": []
+}

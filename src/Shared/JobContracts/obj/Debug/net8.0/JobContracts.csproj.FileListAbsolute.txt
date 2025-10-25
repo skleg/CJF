@@ -1,0 +1,11 @@
+/Users/oleg/Projects/Crayon/CJF/src/Shared/JobContracts/bin/Debug/net8.0/JobContracts.deps.json
+/Users/oleg/Projects/Crayon/CJF/src/Shared/JobContracts/bin/Debug/net8.0/JobContracts.dll
+/Users/oleg/Projects/Crayon/CJF/src/Shared/JobContracts/bin/Debug/net8.0/JobContracts.pdb
+/Users/oleg/Projects/Crayon/CJF/src/Shared/JobContracts/obj/Debug/net8.0/JobContracts.GeneratedMSBuildEditorConfig.editorconfig
+/Users/oleg/Projects/Crayon/CJF/src/Shared/JobContracts/obj/Debug/net8.0/JobContracts.AssemblyInfoInputs.cache
+/Users/oleg/Projects/Crayon/CJF/src/Shared/JobContracts/obj/Debug/net8.0/JobContracts.AssemblyInfo.cs
+/Users/oleg/Projects/Crayon/CJF/src/Shared/JobContracts/obj/Debug/net8.0/JobContracts.csproj.CoreCompileInputs.cache
+/Users/oleg/Projects/Crayon/CJF/src/Shared/JobContracts/obj/Debug/net8.0/JobContracts.dll
+/Users/oleg/Projects/Crayon/CJF/src/Shared/JobContracts/obj/Debug/net8.0/refint/JobContracts.dll
+/Users/oleg/Projects/Crayon/CJF/src/Shared/JobContracts/obj/Debug/net8.0/JobContracts.pdb
+/Users/oleg/Projects/Crayon/CJF/src/Shared/JobContracts/obj/Debug/net8.0/ref/JobContracts.dll

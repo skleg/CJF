@@ -1,0 +1,125 @@
+{
+  "Version": 1,
+  "Hash": "p+PnnO6Sob6a88+XPVCaqsIfVz7C6B3Bv9+V8tA/UI0=",
+  "Source": "Dashboard",
+  "BasePath": "_content/Dashboard",
+  "Mode": "Default",
+  "ManifestType": "Build",
+  "ReferencedProjectsConfiguration": [],
+  "DiscoveryPatterns": [
+    {
+      "Name": "Dashboard/wwwroot",
+      "Source": "Dashboard",
+      "ContentRoot": "/Users/oleg/Projects/Crayon/CJF/src/Dashboard/wwwroot/",
+      "BasePath": "_content/Dashboard",
+      "Pattern": "**"
+    }
+  ],
+  "Assets": [
+    {
+      "Identity": "/Users/oleg/Projects/Crayon/CJF/src/Dashboard/wwwroot/index.html",
+      "SourceId": "Dashboard",
+      "SourceType": "Discovered",
+      "ContentRoot": "/Users/oleg/Projects/Crayon/CJF/src/Dashboard/wwwroot/",
+      "BasePath": "_content/Dashboard",
+      "RelativePath": "index#[.{fingerprint}]?.html",
+      "AssetKind": "All",
+      "AssetMode": "All",
+      "AssetRole": "Primary",
+      "AssetMergeBehavior": "",
+      "AssetMergeSource": "",
+      "RelatedAsset": "",
+      "AssetTraitName": "",
+      "AssetTraitValue": "",
+      "Fingerprint": "ureskg43xk",
+      "Integrity": "yg0XOhj28Lw43N9OzCQvJUOeXzS4NC1DHJBRV2W5tLk=",
+      "CopyToOutputDirectory": "Never",
+      "CopyToPublishDirectory": "PreserveNewest",
+      "OriginalItemSpec": "wwwroot/index.html"
+    }
+  ],
+  "Endpoints": [
+    {
+      "Route": "index.html",
+      "AssetFile": "/Users/oleg/Projects/Crayon/CJF/src/Dashboard/wwwroot/index.html",
+      "Selectors": [],
+      "ResponseHeaders": [
+        {
+          "Name": "Accept-Ranges",
+          "Value": "bytes"
+        },
+        {
+          "Name": "Content-Length",
+          "Value": "1869"
+        },
+        {
+          "Name": "Content-Type",
+          "Value": "text/html"
+        },
+        {
+          "Name": "ETag",
+          "Value": "\"yg0XOhj28Lw43N9OzCQvJUOeXzS4NC1DHJBRV2W5tLk=\""
+        },
+        {
+          "Name": "Last-Modified",
+          "Value": "Sat, 25 Oct 2025 08:14:20 GMT"
+        },
+        {
+          "Name": "Cache-Control",
+          "Value": "no-cache"
+        }
+      ],
+      "EndpointProperties": [
+        {
+          "Name": "integrity",
+          "Value": "sha256-yg0XOhj28Lw43N9OzCQvJUOeXzS4NC1DHJBRV2W5tLk="
+        }
+      ]
+    },
+    {
+      "Route": "index.ureskg43xk.html",
+      "AssetFile": "/Users/oleg/Projects/Crayon/CJF/src/Dashboard/wwwroot/index.html",
+      "Selectors": [],
+      "ResponseHeaders": [
+        {
+          "Name": "Accept-Ranges",
+          "Value": "bytes"
+        },
+        {
+          "Name": "Content-Length",
+          "Value": "1869"
+        },
+        {
+          "Name": "Content-Type",
+          "Value": "text/html"
+        },
+        {
+          "Name": "ETag",
+          "Value": "\"yg0XOhj28Lw43N9OzCQvJUOeXzS4NC1DHJBRV2W5tLk=\""
+        },
+        {
+          "Name": "Last-Modified",
+          "Value": "Sat, 25 Oct 2025 08:14:20 GMT"
+        },
+        {
+          "Name": "Cache-Control",
+          "Value": "max-age=31536000, immutable"
+        }
+      ],
+      "EndpointProperties": [
+        {
+          "Name": "fingerprint",
+          "Value": "ureskg43xk"
+        },
+        {
+          "Name": "label",
+          "Value": "index.html"
+        },
+        {
+          "Name": "integrity",
+          "Value": "sha256-yg0XOhj28Lw43N9OzCQvJUOeXzS4NC1DHJBRV2W5tLk="
+        }
+      ]
+    }
+  ]
+}

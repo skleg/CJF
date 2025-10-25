@@ -1,0 +1,51 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Job Progress Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body{font-family:Segoe UI,Arial;margin:20px}
+    input,button{padding:8px;margin:4px}
+    table{border-collapse:collapse;width:100%;margin-top:12px}
+    th,td{border:1px solid #ddd;padding:8px}
+    th{background:#f4f4f4}
+  </style>
+</head>
+<body>
+  <h1>Job Progress Dashboard</h1>
+  <p>Enter a Job ID to inspect detailed events, or click <em>Recent Jobs</em>.</p>
+  <div>
+    <input id="jobId" placeholder="JobId (GUID)" style="width:300px" />
+    <button id="btnFetch">Fetch Job</button>
+    <button id="btnRecent">Recent Jobs</button>
+  </div>
+  <div id="output"></div>
+
+  <script>
+    const output = document.getElementById('output');
+    document.getElementById('btnFetch').addEventListener('click', async () => {
+      const id = document.getElementById('jobId').value.trim();
+      if (!id) { alert('Enter JobId'); return; }
+      const res = await fetch(`/api/jobs/${encodeURIComponent(id)}`);
+      const data = await res.json();
+      renderTable(data);
+    });
+    document.getElementById('btnRecent').addEventListener('click', async () => {
+      const res = await fetch('/api/jobs');
+      const data = await res.json();
+      renderTable(data);
+    });
+    function renderTable(rows){
+      if (!rows || rows.length === 0){ output.innerHTML = '<p>No records found.</p>'; return; }
+      let html = '<table><thead><tr>';
+      const keys = Object.keys(rows[0]);
+      for (const k of keys) html += `<th>${k}</th>`;
+      html += '</tr></thead><tbody>';
+      for (const r of rows){ html += '<tr>'; for (const k of keys) html += `<td>${(r[k] ?? '')}</td>`; html += '</tr>'; }
+      html += '</tbody></table>';
+      output.innerHTML = html;
+    }
+  </script>
+</body>
+</html>

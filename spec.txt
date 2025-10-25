@@ -1,0 +1,452 @@
+# MassTransit + Azure Service Bus + Blob Lease + Azure Table Storage (Full Audit Trail)
+
+--- FILE: MassTransitSingleJob.csproj ---
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MassTransit" Version="9.0.9" />
+    <PackageReference Include="MassTransit.Azure.ServiceBus.Core" Version="9.0.9" />
+    <PackageReference Include="Azure.Storage.Blobs" Version="12.18.0" />
+    <PackageReference Include="Azure.Data.Tables" Version="12.8.3" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="8.0.0" />
+    <PackageReference Include="Serilog.Extensions.Hosting" Version="2.1.1" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="4.1.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="./Publisher/JobPublisher.csproj" />
+  </ItemGroup>
+</Project>
+
+--- FILE: appsettings.json ---
+{
+  "AzureServiceBus": {
+    "ConnectionString": "<YOUR_SERVICE_BUS_CONNECTION_STRING>",
+    "QueueName": "job-queue"
+  },
+  "AzureBlob": {
+    "ConnectionString": "<YOUR_STORAGE_CONNECTION_STRING>",
+    "ContainerName": "locks",
+    "LockBlobName": "job-lock"
+  },
+  "AzureTable": {
+    "ConnectionString": "<YOUR_STORAGE_CONNECTION_STRING>",
+    "TableName": "JobProgress"
+  },
+  "MassTransit": {
+    "ConcurrentMessageLimit": 1
+  }
+}
+
+--- FILE: Program.cs ---
+using System.Text.Json;
+using MassTransit;
+using Azure.Storage.Blobs;
+using Azure.Data.Tables;
+using Serilog;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+
+var builder = Host.CreateDefaultBuilder(args)
+    .UseSerilog((ctx, lc) => lc.WriteTo.Console())
+    .ConfigureAppConfiguration((hostingContext, config) =>
+    {
+        config.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
+    })
+    .ConfigureServices((hostContext, services) =>
+    {
+        var configuration = hostContext.Configuration;
+
+        var asbConn = configuration.GetValue<string>("AzureServiceBus:ConnectionString");
+        var queue = configuration.GetValue<string>("AzureServiceBus:QueueName");
+
+        var blobConn = configuration.GetValue<string>("AzureBlob:ConnectionString");
+        var containerName = configuration.GetValue<string>("AzureBlob:ContainerName");
+        var lockBlobName = configuration.GetValue<string>("AzureBlob:LockBlobName");
+
+        var tableConn = configuration.GetValue<string>("AzureTable:ConnectionString");
+        var tableName = configuration.GetValue<string>("AzureTable:TableName");
+
+        services.AddSingleton(_ => new BlobContainerClient(blobConn, containerName));
+        services.AddSingleton(sp => new BlobLockOptions { LockBlobName = lockBlobName });
+
+        services.AddSingleton(_ => new TableServiceClient(tableConn));
+        services.AddSingleton(sp => new JobProgressRepository(
+            sp.GetRequiredService<TableServiceClient>(),
+            tableName,
+            sp.GetRequiredService<ILogger<JobProgressRepository>>()));
+
+        services.AddMassTransit(x =>
+        {
+            x.AddConsumer<JobConsumer>();
+
+            x.UsingAzureServiceBus((context, cfg) =>
+            {
+                cfg.Host(asbConn);
+
+                cfg.ReceiveEndpoint(queue, e =>
+                {
+                    e.ConcurrentMessageLimit = configuration.GetValue<int>("MassTransit:ConcurrentMessageLimit");
+                    e.ConfigureConsumer<JobConsumer>(context);
+                });
+            });
+        });
+
+        services.AddHostedService<MassTransitConsoleHostedService>();
+    });
+
+await builder.RunConsoleAsync();
+
+--- FILE: JobProgressEntity.cs ---
+using System;
+using Azure;
+using Azure.Data.Tables;
+
+public class JobProgressEntity : ITableEntity
+{
+    public string PartitionKey { get; set; } = default!; // JobId
+    public string RowKey { get; set; } = default!; // Unique per event
+    public string Status { get; set; } = string.Empty;
+    public string Message { get; set; } = string.Empty;
+    public DateTimeOffset TimestampUtc { get; set; } = DateTimeOffset.UtcNow;
+    public ETag ETag { get; set; }
+}
+
+--- FILE: JobProgressRepository.cs ---
+using System;
+using System.Threading.Tasks;
+using Azure.Data.Tables;
+using Microsoft.Extensions.Logging;
+
+public class JobProgressRepository
+{
+    private readonly TableClient _tableClient;
+    private readonly ILogger<JobProgressRepository> _logger;
+
+    public JobProgressRepository(TableServiceClient serviceClient, string tableName, ILogger<JobProgressRepository> logger)
+    {
+        _tableClient = serviceClient.GetTableClient(tableName);
+        _tableClient.CreateIfNotExists();
+        _logger = logger;
+    }
+
+    public async Task LogProgressAsync(Guid jobId, string status, string message)
+    {
+        var entity = new JobProgressEntity
+        {
+            PartitionKey = jobId.ToString(),
+            RowKey = Guid.NewGuid().ToString(),
+            Status = status,
+            Message = message,
+            TimestampUtc = DateTimeOffset.UtcNow
+        };
+
+        await _tableClient.AddEntityAsync(entity);
+        _logger.LogInformation("{JobId}: Logged {Status} - {Message}", jobId, status, message);
+    }
+}
+
+--- FILE: JobConsumer.cs ---
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+using Azure;
+using Azure.Storage.Blobs;
+using Azure.Storage.Blobs.Specialized;
+using MassTransit;
+using Microsoft.Extensions.Logging;
+
+public class BlobLockOptions
+{
+    public string LockBlobName { get; set; } = "job-lock";
+}
+
+public class JobConsumer : IConsumer<RunJob>
+{
+    private readonly BlobContainerClient _containerClient;
+    private readonly BlobLockOptions _options;
+    private readonly ILogger<JobConsumer> _logger;
+    private readonly JobProgressRepository _progressRepo;
+
+    public JobConsumer(BlobContainerClient containerClient, BlobLockOptions options, ILogger<JobConsumer> logger, JobProgressRepository progressRepo)
+    {
+        _containerClient = containerClient;
+        _options = options;
+        _logger = logger;
+        _progressRepo = progressRepo;
+    }
+
+    public async Task Consume(ConsumeContext<RunJob> context)
+    {
+        await _containerClient.CreateIfNotExistsAsync();
+        var blobClient = _containerClient.GetBlobClient(_options.LockBlobName);
+        await blobClient.UploadAsync(BinaryData.FromString("lock"), overwrite: true);
+
+        var leaseClient = blobClient.GetBlobLeaseClient();
+        var cts = new CancellationTokenSource();
+        context.CancellationToken.Register(cts.Cancel);
+
+        try
+        {
+            _logger.LogInformation("{JobId}: Attempting to acquire lease...", context.Message.JobId);
+            var lease = await leaseClient.AcquireAsync(TimeSpan.FromSeconds(60));
+            _logger.LogInformation("{JobId}: Lease acquired (LeaseId: {LeaseId}). Running job...", context.Message.JobId, lease.Value.LeaseId);
+
+            var renewalTask = RenewLeasePeriodicallyAsync(leaseClient, TimeSpan.FromSeconds(40), cts.Token);
+
+            await _progressRepo.LogProgressAsync(context.Message.JobId, "Started", "Job started and lease acquired.");
+
+            try
+            {
+                await ProcessJob(context.Message, cts.Token);
+                await _progressRepo.LogProgressAsync(context.Message.JobId, "Completed", "Job completed successfully.");
+                _logger.LogInformation("{JobId}: Job completed successfully.", context.Message.JobId);
+            }
+            catch (OperationCanceledException)
+            {
+                await _progressRepo.LogProgressAsync(context.Message.JobId, "Cancelled", "Job cancelled.");
+                _logger.LogWarning("{JobId}: Job cancelled.", context.Message.JobId);
+            }
+            catch (Exception ex)
+            {
+                await _progressRepo.LogProgressAsync(context.Message.JobId, "Failed", ex.Message);
+                _logger.LogError(ex, "{JobId}: Job processing failed.", context.Message.JobId);
+                throw;
+            }
+            finally
+            {
+                cts.Cancel();
+                await Task.WhenAny(renewalTask, Task.Delay(500));
+                await leaseClient.ReleaseAsync();
+                _logger.LogInformation("{JobId}: Lease released.", context.Message.JobId);
+            }
+        }
+        catch (RequestFailedException ex)
+        {
+            _logger.LogInformation("{JobId}: Could not acquire lease, deferring message. ({Message})", context.Message.JobId, ex.Message);
+            await context.Defer(TimeSpan.FromSeconds(10));
+        }
+    }
+
+    private async Task RenewLeasePeriodicallyAsync(BlobLeaseClient leaseClient, TimeSpan renewInterval, CancellationToken token)
+    {
+        try
+        {
+            while (!token.IsCancellationRequested)
+            {
+                await Task.Delay(renewInterval, token);
+                try
+                {
+                    await leaseClient.RenewAsync(token);
+                    _logger.LogDebug("Lease renewed successfully.");
+                }
+                catch (TaskCanceledException) { }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Lease renewal failed.");
+                }
+            }
+        }
+        catch (OperationCanceledException) { }
+    }
+
+    private async Task ProcessJob(RunJob message, CancellationToken token)
+    {
+        for (int i = 0; i < 10; i++)
+        {
+            token.ThrowIfCancellationRequested();
+            _logger.LogInformation("{JobId}: Processing step {Step}/10", message.JobId, i + 1);
+            await _progressRepo.LogProgressAsync(message.JobId, $"Step {i + 1}", $"Processing step {i + 1}.");
+            await Task.Delay(TimeSpan.FromSeconds(5), token);
+        }
+    }
+}
+
+--- FILE: README.md ---
+# MassTransit Single-Job Processor with Azure Blob Lease and Azure Table Storage Progress
+
+## Overview
+This version includes:
+- Worker service that ensures one job at a time using Azure Blob leases.
+- Lease renewal and graceful cancellation.
+- Full job progress logging to **Azure Table Storage** (one record per step/event).
+- Separate **JobPublisher** utility to enqueue jobs for testing.
+
+## Setup
+1. Configure Azure Service Bus, Storage Blob, and Table Storage connection strings in `appsettings.json`.
+2. Run the worker:
+   ```bash
+   dotnet run
+   ```
+3. Run the publisher:
+   ```bash
+   dotnet run --project Publisher
+   ```
+4. Each job will log its lifecycle into the configured Table Storage table.
+
+## Table Structure
+| PartitionKey (JobId) | RowKey (UUID) | Status | Message | TimestampUtc |
+|----------------------|---------------|---------|----------|---------------|
+| 1234...              | abcd...       | Step 1  | Processing step 1 | 2025-10-25 |
+| 1234...              | efgh...       | Completed | Job completed successfully | 2025-10-25 |
+
+Each status change is appended as a new row for full traceability.
+
+--- DIRECTORY: Dashboard ---
+
+--- FILE: Dashboard/Dashboard.csproj ---
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Azure.Data.Tables" Version="12.8.3" />
+  </ItemGroup>
+</Project>
+
+--- FILE: Dashboard/Program.cs ---
+using Azure;
+using Azure.Data.Tables;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddRazorPages();
+
+// Table storage
+var configuration = builder.Configuration;
+var tableConn = configuration.GetValue<string>("AzureTable:ConnectionString");
+var tableName = configuration.GetValue<string>("AzureTable:TableName");
+var tableService = new TableServiceClient(tableConn);
+var tableClient = tableService.GetTableClient(tableName);
+await tableClient.CreateIfNotExistsAsync();
+
+builder.Services.AddSingleton(tableClient);
+
+var app = builder.Build();
+
+app.UseStaticFiles();
+app.UseRouting();
+
+app.MapGet("/api/jobs", async (TableClient client) =>
+{
+    // return recent job summaries (latest event per job)
+    var results = new List<object>();
+    // Query recent entities (limit 200)
+    await foreach (var e in client.QueryAsync<JobProgressEntity>(filter: null, maxPerPage: 200))
+    {
+        results.Add(new { e.PartitionKey, e.RowKey, e.Status, e.Message, e.TimestampUtc });
+    }
+    return Results.Json(results);
+});
+
+app.MapGet("/api/jobs/{jobId}", async (string jobId, TableClient client) =>
+{
+    var partition = jobId;
+    var list = new List<JobProgressEntity>();
+    await foreach (var page in client.QueryAsync<JobProgressEntity>(e => e.PartitionKey == partition))
+    {
+        list.Add(page);
+    }
+    return Results.Json(list.OrderBy(e => e.TimestampUtc));
+});
+
+app.MapFallbackToFile("index.html");
+
+app.Run();
+
+record JobProgressEntity : ITableEntity
+{
+    public string PartitionKey { get; set; } = string.Empty;
+    public string RowKey { get; set; } = string.Empty;
+    public string? Status { get; set; }
+    public string? Message { get; set; }
+    public DateTimeOffset TimestampUtc { get; set; }
+    public ETag ETag { get; set; }
+}
+
+--- FILE: Dashboard/wwwroot/index.html ---
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Job Progress Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body{font-family:Segoe UI,Arial;margin:20px}
+    input,button{padding:8px;margin:4px}
+    table{border-collapse:collapse;width:100%;margin-top:12px}
+    th,td{border:1px solid #ddd;padding:8px}
+    th{background:#f4f4f4}
+  </style>
+</head>
+<body>
+  <h1>Job Progress Dashboard</h1>
+  <p>Enter a Job ID to inspect detailed events, or click <em>Recent Jobs</em>.</p>
+  <div>
+    <input id="jobId" placeholder="JobId (GUID)" style="width:300px" />
+    <button id="btnFetch">Fetch Job</button>
+    <button id="btnRecent">Recent Jobs</button>
+  </div>
+  <div id="output"></div>
+
+  <script>
+    const output = document.getElementById('output');
+    document.getElementById('btnFetch').addEventListener('click', async () => {
+      const id = document.getElementById('jobId').value.trim();
+      if (!id) { alert('Enter JobId'); return; }
+      const res = await fetch(`/api/jobs/${encodeURIComponent(id)}`);
+      const data = await res.json();
+      renderTable(data);
+    });
+    document.getElementById('btnRecent').addEventListener('click', async () => {
+      const res = await fetch('/api/jobs');
+      const data = await res.json();
+      renderTable(data);
+    });
+    function renderTable(rows){
+      if (!rows || rows.length === 0){ output.innerHTML = '<p>No records found.</p>'; return; }
+      let html = '<table><thead><tr>';
+      const keys = Object.keys(rows[0]);
+      for (const k of keys) html += `<th>${k}</th>`;
+      html += '</tr></thead><tbody>';
+      for (const r of rows){ html += '<tr>'; for (const k of keys) html += `<td>${(r[k] ?? '')}</td>`; html += '</tr>'; }
+      html += '</tbody></table>';
+      output.innerHTML = html;
+    }
+  </script>
+</body>
+</html>
+
+--- UPDATE: README.md ---
+
+### Dashboard (Optional)
+A lightweight ASP.NET Core dashboard is included under `/Dashboard`. It serves a static HTML UI and two API endpoints:
+
+- `GET /api/jobs` – lists recent job events.
+- `GET /api/jobs/{jobId}` – lists all events for the given job in chronological order.
+
+To run the dashboard:
+
+```bash
+cd Dashboard
+dotnet run --urls "http://localhost:5002"
+```
+
+Open `http://localhost:5002` in your browser and use the UI to query job progress.
+
+Make sure `appsettings.json` in the worker project contains the `AzureTable:ConnectionString` and `AzureTable:TableName` used by the worker; the dashboard reads the same appsettings when run from the same folder or environment variables.
+

@@ -19,12 +19,12 @@ var builder = Host.CreateDefaultBuilder(args)
         var rabbitMqPass = configuration.GetValue<string>("RabbitMQ:Password") ?? "guest";
         var queueName = configuration.GetValue<string>("RabbitMQ:QueueName") ?? "job-queue";
 
-        var blobConn = configuration.GetValue<string>("AzureBlob:ConnectionString");
-        var containerName = configuration.GetValue<string>("AzureBlob:ContainerName");
-        var lockBlobName = configuration.GetValue<string>("AzureBlob:LockBlobName");
+        var blobConn = configuration.GetValue<string>("AzureBlob:ConnectionString") ?? "UseDevelopmentStorage=true";
+        var containerName = configuration.GetValue<string>("AzureBlob:ContainerName") ?? "locks";
+        var lockBlobName = configuration.GetValue<string>("AzureBlob:LockBlobName") ?? "job-lock";
 
-        var tableConn = configuration.GetValue<string>("AzureTable:ConnectionString");
-        var tableName = configuration.GetValue<string>("AzureTable:TableName");
+        var tableConn = configuration.GetValue<string>("AzureTable:ConnectionString") ?? "UseDevelopmentStorage=true";
+        var tableName = configuration.GetValue<string>("AzureTable:TableName") ?? "JobProgress";
 
         services.AddSingleton(_ => new BlobContainerClient(blobConn, containerName));
         services.AddSingleton(sp => new BlobLockOptions { LockBlobName = lockBlobName });

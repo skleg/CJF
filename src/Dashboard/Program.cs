@@ -1,10 +1,5 @@
 using Azure;
 using Azure.Data.Tables;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -28,13 +23,24 @@ app.UseRouting();
 app.MapGet("/api/jobs", async (TableClient client) =>
 {
     // return recent job summaries (latest event per job)
-    var results = new List<object>();
+    var results = new List<JobProgressEntity>();
     // Query recent entities (limit 200)
     await foreach (var e in client.QueryAsync<JobProgressEntity>(maxPerPage: 200))
     {
-        results.Add(new { e.PartitionKey, e.RowKey, e.Status, e.Message, e.TimestampUtc });
+        results.Add(e);
     }
-    return Results.Json(results);
+    // Order by TimestampUtc descending (most recent first) and format for display
+    var orderedResults = results
+        .OrderByDescending(e => e.TimestampUtc)
+        .Select(e => new 
+        { 
+            JobId = e.PartitionKey,
+            Status = e.Status,
+            Message = e.Message,
+            Time = e.TimestampUtc.ToString("MMM/dd HH:mm:ss")
+        });
+    
+    return Results.Json(orderedResults);
 });
 
 app.MapGet("/api/jobs/{jobId}", async (string jobId, TableClient client) =>
@@ -45,7 +51,17 @@ app.MapGet("/api/jobs/{jobId}", async (string jobId, TableClient client) =>
     {
         list.Add(page);
     }
-    return Results.Json(list.OrderBy(e => e.TimestampUtc));
+    // Order by TimestampUtc descending (most recent first) and format for display
+    var formattedResults = list
+        .OrderByDescending(e => e.TimestampUtc)
+        .Select(e => new 
+        { 
+            Status = e.Status,
+            Message = e.Message,
+            Time = e.TimestampUtc.ToString("MMM/dd HH:mm:ss")
+        });
+    
+    return Results.Json(formattedResults);
 });
 
 app.MapFallbackToFile("index.html");

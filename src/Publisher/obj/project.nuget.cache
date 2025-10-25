@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "dgSpecHash": "QLhvrCf2KXc=",
+  "dgSpecHash": "1Wf3CIFWqNE=",
   "success": true,
   "projectFilePath": "/Users/oleg/Projects/Crayon/CJF/src/Publisher/Publisher.csproj",
   "expectedPackageFiles": [
@@ -51,16 +51,5 @@
     "/Users/oleg/.nuget/packages/microsoft.aspnetcore.app.ref/8.0.14/microsoft.aspnetcore.app.ref.8.0.14.nupkg.sha512",
     "/Users/oleg/.nuget/packages/microsoft.netcore.app.host.osx-x64/8.0.14/microsoft.netcore.app.host.osx-x64.8.0.14.nupkg.sha512"
   ],
-  "logs": [
-    {
-      "code": "NU1603",
-      "level": "Warning",
-      "warningLevel": 1,
-      "message": "Publisher depends on Serilog.Extensions.Hosting (>= 2.1.1) but Serilog.Extensions.Hosting 2.1.1 was not found. Serilog.Extensions.Hosting 3.0.0 was resolved instead.",
-      "libraryId": "Serilog.Extensions.Hosting",
-      "targetGraphs": [
-        "net8.0"
-      ]
-    }
-  ]
+  "logs": []
 }

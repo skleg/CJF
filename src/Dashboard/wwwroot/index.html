@@ -101,6 +101,9 @@
       background-color: #ecf0f1;
       transform: translateY(-1px);
     }
+    .job-name-link:visited {
+      color: #3498db !important;
+    }
   </style>
 </head>
 <body>
@@ -159,9 +162,10 @@
       }
     });
     
-    // Event delegation for clicking on job names
+    // Event delegation for clicking on job name links
     output.addEventListener('click', async (e) => {
       if (e.target.classList.contains('job-name-link')) {
+        e.preventDefault(); // Prevent default link behavior
         const jobId = e.target.getAttribute('data-job-id');
         if (jobId) {
           await fetchJobDetails(jobId);
@@ -214,7 +218,7 @@
           
           // Make JobName clickable in Recent Jobs view
           if (k === 'JobName' && title === 'Recent Job Activity' && r.JobId) {
-            value = `<span class="job-name-link" data-job-id="${r.JobId}" title="Click to view job details">📋 ${value}</span>`;
+            value = `<a href="#" class="job-name-link" data-job-id="${r.JobId}" title="Click to view job details">📋 ${value}</a>`;
           }
           
           html += `<td class="${cellClass}">${value}</td>`;

@@ -34,6 +34,7 @@ app.MapGet("/api/jobs", async (TableClient client) =>
         .OrderByDescending(e => e.TimestampUtc)
         .Select(e => new 
         { 
+            JobName = e.JobName,
             JobId = e.PartitionKey,
             Status = e.Status,
             Message = e.Message,
@@ -72,6 +73,7 @@ record JobProgressEntity : ITableEntity
 {
     public string PartitionKey { get; set; } = string.Empty;
     public string RowKey { get; set; } = string.Empty;
+    public string? JobName { get; set; }
     public string? Status { get; set; }
     public string? Message { get; set; }
     public DateTimeOffset TimestampUtc { get; set; }

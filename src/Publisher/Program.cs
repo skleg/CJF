@@ -49,6 +49,11 @@ try
         
         Console.WriteLine("Job Publisher - Press any key to send a job, 'q' to quit");
         
+        // Random job name generator
+        var adjectives = new[] { "Urgent", "Critical", "Routine", "Priority", "Express", "Standard", "Advanced", "Quick", "Complex", "Simple" };
+        var tasks = new[] { "Data Processing", "File Analysis", "Report Generation", "System Backup", "Data Migration", "Content Review", "Performance Test", "Security Scan", "Index Rebuild", "Cache Refresh" };
+        var random = new Random();
+        
         while (true)
         {
             var key = Console.ReadKey(true);
@@ -57,11 +62,15 @@ try
                 break;
 
             var jobId = Guid.NewGuid();
+            var adjective = adjectives[random.Next(adjectives.Length)];
+            var task = tasks[random.Next(tasks.Length)];
+            var jobName = $"{adjective} {task}";
+            
             var job = new RunJob
             {
                 JobId = jobId,
-                JobName = $"Sample Job {DateTime.Now:HH:mm:ss}",
-                Description = "A sample job for testing the processing system",
+                JobName = jobName,
+                Description = $"Automated {task.ToLower()} task with {adjective.ToLower()} priority",
                 CreatedAt = DateTime.UtcNow
             };
 

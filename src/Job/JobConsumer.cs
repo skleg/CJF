@@ -44,22 +44,22 @@ public class JobConsumer : IConsumer<RunJob>
 
             var renewalTask = RenewLeasePeriodicallyAsync(leaseClient, TimeSpan.FromSeconds(40), cts.Token);
 
-            await _progressRepo.LogProgressAsync(context.Message.JobId, "Started", "Job started and lease acquired.");
+            await _progressRepo.LogProgressAsync(context.Message.JobId, context.Message.JobName, "Started", "Job started and lease acquired.");
 
             try
             {
                 await ProcessJob(context.Message, cts.Token);
-                await _progressRepo.LogProgressAsync(context.Message.JobId, "Completed", "Job completed successfully.");
+                await _progressRepo.LogProgressAsync(context.Message.JobId, context.Message.JobName, "Completed", "Job completed successfully.");
                 _logger.LogInformation("{JobId}: Job completed successfully.", context.Message.JobId);
             }
             catch (OperationCanceledException)
             {
-                await _progressRepo.LogProgressAsync(context.Message.JobId, "Cancelled", "Job cancelled.");
+                await _progressRepo.LogProgressAsync(context.Message.JobId, context.Message.JobName, "Cancelled", "Job cancelled.");
                 _logger.LogWarning("{JobId}: Job cancelled.", context.Message.JobId);
             }
             catch (Exception ex)
             {
-                await _progressRepo.LogProgressAsync(context.Message.JobId, "Failed", ex.Message);
+                await _progressRepo.LogProgressAsync(context.Message.JobId, context.Message.JobName, "Failed", ex.Message);
                 _logger.LogError(ex, "{JobId}: Job processing failed.", context.Message.JobId);
                 throw;
             }
@@ -106,7 +106,7 @@ public class JobConsumer : IConsumer<RunJob>
         {
             token.ThrowIfCancellationRequested();
             _logger.LogInformation("{JobId}: Processing step {Step}/10", message.JobId, i + 1);
-            await _progressRepo.LogProgressAsync(message.JobId, $"Step {i + 1}", $"Processing step {i + 1}.");
+            await _progressRepo.LogProgressAsync(message.JobId, message.JobName, $"Step {i + 1}", $"Processing step {i + 1}.");
             await Task.Delay(TimeSpan.FromSeconds(5), token);
         }
     }

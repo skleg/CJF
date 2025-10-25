@@ -85,6 +85,22 @@
       color: #7f8c8d; 
       font-size: 16px;
     }
+    .job-name-link {
+      color: #3498db !important;
+      text-decoration: none !important;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      padding: 4px 8px;
+      border-radius: 4px;
+      display: inline-block;
+    }
+    .job-name-link:hover {
+      color: #2980b9 !important;
+      text-decoration: underline !important;
+      background-color: #ecf0f1;
+      transform: translateY(-1px);
+    }
   </style>
 </head>
 <body>
@@ -103,6 +119,19 @@
 
   <script>
     const output = document.getElementById('output');
+    
+    // Function to fetch job details when clicking on job name
+    async function fetchJobDetails(jobId) {
+      try {
+        const res = await fetch(`/api/jobs/${encodeURIComponent(jobId)}`);
+        const data = await res.json();
+        renderTable(data, 'Job Details');
+        // Update the input field with the clicked job ID
+        document.getElementById('jobId').value = jobId;
+      } catch (error) {
+        output.innerHTML = '<div class="no-records">Error fetching job details. Please try again.</div>';
+      }
+    }
     
     document.getElementById('btnFetch').addEventListener('click', async () => {
       const id = document.getElementById('jobId').value.trim();
@@ -130,6 +159,16 @@
       }
     });
     
+    // Event delegation for clicking on job names
+    output.addEventListener('click', async (e) => {
+      if (e.target.classList.contains('job-name-link')) {
+        const jobId = e.target.getAttribute('data-job-id');
+        if (jobId) {
+          await fetchJobDetails(jobId);
+        }
+      }
+    });
+    
     function renderTable(rows, title) {
       if (!rows || rows.length === 0) { 
         output.innerHTML = '<div class="no-records">No records found.</div>'; 
@@ -141,6 +180,9 @@
       
       // Create human-friendly headers
       for (const k of keys) {
+        // Skip JobId column in the header for Recent Jobs view, but keep it for Job Details
+        if (k === 'JobId' && title === 'Recent Job Activity') continue;
+        
         const header = k.charAt(0).toUpperCase() + k.slice(1);
         html += `<th>${header}</th>`;
       }
@@ -150,6 +192,9 @@
       for (const r of rows) { 
         html += '<tr>'; 
         for (const k of keys) {
+          // Skip JobId column in Recent Jobs view, but keep it for Job Details
+          if (k === 'JobId' && title === 'Recent Job Activity') continue;
+          
           let value = r[k] ?? '';
           let cellClass = '';
           
@@ -165,6 +210,11 @@
           // Add special formatting for time column
           if (k.toLowerCase() === 'time') {
             cellClass += ' time-column';
+          }
+          
+          // Make JobName clickable in Recent Jobs view
+          if (k === 'JobName' && title === 'Recent Job Activity' && r.JobId) {
+            value = `<span class="job-name-link" data-job-id="${r.JobId}" title="Click to view job details">📋 ${value}</span>`;
           }
           
           html += `<td class="${cellClass}">${value}</td>`;
